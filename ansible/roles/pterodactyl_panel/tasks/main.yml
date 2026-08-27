@@ -1,0 +1,146 @@
+---
+- name: Configure Pterodactyl Panel stack
+  when: pterodactyl_panel_enabled | bool
+  block:
+    - name: Require Pterodactyl secrets
+      ansible.builtin.assert:
+        that:
+          - vault_pterodactyl_db_password is defined
+          - vault_pterodactyl_db_password | length >= 24
+          - vault_pterodactyl_db_root_password is defined
+          - vault_pterodactyl_db_root_password | length >= 24
+          - vault_pterodactyl_app_key is defined
+          - vault_pterodactyl_app_key is match('^base64:.+')
+          - vault_pterodactyl_hashids_salt is defined
+          - vault_pterodactyl_hashids_salt | length >= 32
+        fail_msg: >-
+          Define the Pterodactyl DB passwords, APP_KEY, and HASHIDS_SALT
+          in the encrypted inventory/group_vars/games/vault.yml.
+      no_log: true
+
+    - name: Create Pterodactyl directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - { path: /etc/pterodactyl, mode: "0750" }
+        - { path: "{{ pterodactyl_data_dir }}" }
+        - { path: "{{ pterodactyl_data_dir }}/database" }
+        - { path: "{{ pterodactyl_data_dir }}/redis" }
+        - { path: "{{ pterodactyl_data_dir }}/var" }
+        - { path: "{{ pterodactyl_data_dir }}/nginx" }
+        - { path: "{{ pterodactyl_data_dir }}/certs" }
+        - { path: "{{ pterodactyl_data_dir }}/logs" }
+
+    - name: Install Pterodactyl database environment
+      ansible.builtin.template:
+        src: database.env.j2
+        dest: /etc/pterodactyl/database.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      register: pterodactyl_db_env
+
+    - name: Install Pterodactyl Panel environment
+      ansible.builtin.template:
+        src: panel.env.j2
+        dest: /etc/pterodactyl/panel.env
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      register: pterodactyl_panel_env
+
+    - name: Install Pterodactyl Podman network Quadlet
+      ansible.builtin.template:
+        src: pterodactyl.network.j2
+        dest: /etc/containers/systemd/pterodactyl.network
+        owner: root
+        group: root
+        mode: "0644"
+      register: pterodactyl_network_quadlet
+
+    - name: Install MariaDB Quadlet
+      ansible.builtin.template:
+        src: pterodactyl-db.container.j2
+        dest: /etc/containers/systemd/pterodactyl-db.container
+        owner: root
+        group: root
+        mode: "0644"
+      register: pterodactyl_db_quadlet
+
+    - name: Install Redis Quadlet
+      ansible.builtin.template:
+        src: pterodactyl-cache.container.j2
+        dest: /etc/containers/systemd/pterodactyl-cache.container
+        owner: root
+        group: root
+        mode: "0644"
+      register: pterodactyl_cache_quadlet
+
+    - name: Install Panel Quadlet
+      ansible.builtin.template:
+        src: pterodactyl-panel.container.j2
+        dest: /etc/containers/systemd/pterodactyl-panel.container
+        owner: root
+        group: root
+        mode: "0644"
+      register: pterodactyl_panel_quadlet
+
+    - name: Reload systemd for Pterodactyl Quadlets
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Start Pterodactyl database
+      ansible.builtin.systemd:
+        name: pterodactyl-db.service
+        enabled: true
+        state: started
+
+    - name: Start Pterodactyl Redis cache
+      ansible.builtin.systemd:
+        name: pterodactyl-cache.service
+        enabled: true
+        state: started
+
+    - name: Restart database when its environment changed
+      ansible.builtin.systemd:
+        name: pterodactyl-db.service
+        state: restarted
+      when: pterodactyl_db_env.changed
+
+    - name: Restart cache when its Quadlet changed
+      ansible.builtin.systemd:
+        name: pterodactyl-cache.service
+        state: restarted
+      when: pterodactyl_cache_quadlet.changed
+
+    - name: Start Pterodactyl Panel
+      ansible.builtin.systemd:
+        name: pterodactyl-panel.service
+        enabled: true
+        state: started
+
+    - name: Restart Panel when configuration changed
+      ansible.builtin.systemd:
+        name: pterodactyl-panel.service
+        state: restarted
+      when: >-
+        pterodactyl_panel_env.changed or
+        pterodactyl_panel_quadlet.changed or
+        pterodactyl_network_quadlet.changed
+
+    - name: Wait for Pterodactyl login page
+      ansible.builtin.uri:
+        url: "{{ pterodactyl_panel_url }}/auth/login"
+        method: GET
+        status_code: 200
+        validate_certs: false
+      register: pterodactyl_panel_http
+      retries: 30
+      delay: 5
+      until: pterodactyl_panel_http.status == 200

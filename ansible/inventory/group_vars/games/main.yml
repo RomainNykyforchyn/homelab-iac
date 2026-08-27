@@ -4,3 +4,22 @@ homelab_user: homelab
 playit_enabled: true
 playit_image: ghcr.io/playit-cloud/playit-agent:1.0.10
 playit_install_dir: /opt/homelab/playit
+
+# Pterodactyl Panel
+pterodactyl_panel_enabled: true
+
+pterodactyl_panel_image: ghcr.io/pterodactyl/panel:v1.15.0
+pterodactyl_database_image: docker.io/library/mariadb:11
+pterodactyl_redis_image: docker.io/library/redis:alpine
+
+pterodactyl_data_dir: /srv/pterodactyl
+
+# LAN only for now, not through playit.
+pterodactyl_panel_url: "http://{{ ansible_host }}"
+pterodactyl_panel_http_port: 80
+
+pterodactyl_timezone: UTC
+pterodactyl_service_author: noreply@example.invalid
+
+# Separate from other container networks.
+pterodactyl_podman_subnet: 172.29.0.0/24

@@ -1,0 +1,24 @@
+[Unit]
+Description=Pterodactyl Panel
+Requires=pterodactyl-db.service pterodactyl-cache.service
+After=network-online.target pterodactyl-db.service pterodactyl-cache.service
+Wants=network-online.target
+
+[Container]
+Image={{ pterodactyl_panel_image }}
+ContainerName=pterodactyl-panel
+Network=pterodactyl.network
+EnvironmentFile=/etc/pterodactyl/panel.env
+PublishPort={{ pterodactyl_panel_http_port }}:80
+Volume={{ pterodactyl_data_dir }}/var:/app/var
+Volume={{ pterodactyl_data_dir }}/nginx:/etc/nginx/http.d
+Volume={{ pterodactyl_data_dir }}/certs:/etc/letsencrypt
+Volume={{ pterodactyl_data_dir }}/logs:/app/storage/logs
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

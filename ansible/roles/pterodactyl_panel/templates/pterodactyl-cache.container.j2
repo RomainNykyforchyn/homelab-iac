@@ -1,0 +1,18 @@
+[Unit]
+Description=Pterodactyl Redis
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ pterodactyl_redis_image }}
+ContainerName=pterodactyl-cache
+Network=pterodactyl.network
+Volume={{ pterodactyl_data_dir }}/redis:/data
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
