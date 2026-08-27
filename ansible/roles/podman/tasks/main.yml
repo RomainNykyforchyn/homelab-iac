@@ -1,0 +1,16 @@
+---
+- name: Install Podman
+  ansible.builtin.apt:
+    name:
+      - podman
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure containers systemd directory exists
+  ansible.builtin.file:
+    path: /etc/containers/systemd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"

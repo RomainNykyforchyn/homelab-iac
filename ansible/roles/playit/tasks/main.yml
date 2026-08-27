@@ -1,0 +1,49 @@
+---
+- name: Configure playit agent
+  when: playit_enabled | bool
+  block:
+    - name: Require playit secret
+      ansible.builtin.assert:
+        that:
+          - vault_playit_secret_key is defined
+          - vault_playit_secret_key | length > 10
+          - vault_playit_secret_key != "REPLACE_ME"
+        fail_msg: >-
+          Define vault_playit_secret_key in ansible/group_vars/vault.yml
+          before enabling playit.
+
+    - name: Create playit directory
+      ansible.builtin.file:
+        path: "{{ playit_install_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install playit environment secret
+      ansible.builtin.template:
+        src: playit.env.j2
+        dest: "{{ playit_install_dir }}/playit.env"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Install playit Quadlet
+      ansible.builtin.template:
+        src: playit.container.j2
+        dest: /etc/containers/systemd/playit.container
+        owner: root
+        group: root
+        mode: "0644"
+      register: playit_quadlet
+
+    - name: Reload systemd for Quadlet
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: playit_quadlet.changed
+
+    - name: Start playit agent
+      ansible.builtin.systemd:
+        name: playit.service
+        state: started

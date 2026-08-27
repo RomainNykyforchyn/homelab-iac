@@ -1,0 +1,17 @@
+[Unit]
+Description=playit.gg agent
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image={{ playit_image }}
+ContainerName=playit
+Network=host
+EnvironmentFile={{ playit_install_dir }}/playit.env
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

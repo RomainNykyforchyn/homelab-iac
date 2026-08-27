@@ -1,0 +1,20 @@
+# OpenTofu / Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+infra/tofu/terraform.tfvars
+
+# Ansible inventory/secrets generated locally
+ansible/inventory/hosts.yml
+ansible/inventory/group_vars/games/vault.yml
+*.retry
+
+# App secrets
+apps/**/.env
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

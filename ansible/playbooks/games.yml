@@ -1,0 +1,9 @@
+---
+- name: Configure games VM
+  hosts: games
+  become: true
+
+  roles:
+    - common
+    - podman
+    - playit

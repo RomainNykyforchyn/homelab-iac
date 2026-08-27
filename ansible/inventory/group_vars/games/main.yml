@@ -1,0 +1,6 @@
+---
+homelab_user: homelab
+
+playit_enabled: true
+playit_image: ghcr.io/playit-cloud/playit-agent:1.0.10
+playit_install_dir: /opt/homelab/playit
