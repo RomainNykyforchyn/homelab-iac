@@ -1,0 +1,21 @@
+# Proxmox API
+proxmox_endpoint = "https://192.168.1.10:8006/"
+node_name         = "pve"
+
+# Storage
+image_datastore = "local"
+vm_datastore    = "local-lvm"
+
+# Network
+games_vm_ip_cidr = "192.168.1.50/24"
+games_vm_gateway = "192.168.1.1"
+dns_servers      = ["1.1.1.1", "9.9.9.9"]
+
+# VM sizing
+games_vm_cores     = 8
+games_vm_memory_mb = 24576
+games_vm_disk_gb   = 200
+
+# Access
+vm_username         = "homelab"
+ssh_public_key_path = "~/.ssh/homelab_iac.pub"
