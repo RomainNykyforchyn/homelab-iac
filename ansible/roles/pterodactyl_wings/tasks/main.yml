@@ -1,0 +1,96 @@
+---
+- name: Configure Pterodactyl Wings
+  when: pterodactyl_wings_enabled | bool
+  block:
+    - name: Require Wings configuration from Ansible Vault
+      ansible.builtin.assert:
+        that:
+          - vault_pterodactyl_wings_config is defined
+          - vault_pterodactyl_wings_config | trim | length > 100
+          - "'uuid:' in vault_pterodactyl_wings_config"
+          - "'token:' in vault_pterodactyl_wings_config"
+        fail_msg: >-
+          Copy the complete node Configuration YAML from the Pterodactyl Panel
+          into vault_pterodactyl_wings_config in the encrypted games vault.
+      no_log: true
+
+    - name: Ensure Pterodactyl configuration directory exists
+      ansible.builtin.file:
+        path: /etc/pterodactyl
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install Wings node configuration
+      ansible.builtin.copy:
+        content: "{{ vault_pterodactyl_wings_config | trim }}\n"
+        dest: /etc/pterodactyl/config.yml
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+      register: wings_config
+
+    - name: Download pinned Wings binary
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/pterodactyl/wings/releases/download/{{ pterodactyl_wings_version }}/wings_linux_amd64
+        dest: "/usr/local/bin/wings-{{ pterodactyl_wings_version }}"
+        owner: root
+        group: root
+        mode: "0755"
+      register: wings_binary
+
+    - name: Point Wings executable at pinned version
+      ansible.builtin.file:
+        src: "/usr/local/bin/wings-{{ pterodactyl_wings_version }}"
+        dest: /usr/local/bin/wings
+        state: link
+        force: true
+      register: wings_symlink
+
+    - name: Install Wings systemd unit
+      ansible.builtin.template:
+        src: wings.service.j2
+        dest: /etc/systemd/system/wings.service
+        owner: root
+        group: root
+        mode: "0644"
+      register: wings_unit
+
+    - name: Reload systemd after Wings unit changes
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: wings_unit.changed
+
+    - name: Enable and start Wings
+      ansible.builtin.systemd:
+        name: wings.service
+        enabled: true
+        state: started
+
+    - name: Restart Wings when configuration or binary changed
+      ansible.builtin.systemd:
+        name: wings.service
+        state: restarted
+      when: >-
+        wings_config.changed or
+        wings_binary.changed or
+        wings_symlink.changed or
+        wings_unit.changed
+
+    - name: Wait for Wings API port
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ pterodactyl_wings_api_port }}"
+        timeout: 60
+
+    - name: Check Wings version
+      ansible.builtin.command: /usr/local/bin/wings version
+      register: wings_version_output
+      changed_when: false
+
+    - name: Show Wings version
+      ansible.builtin.debug:
+        var: wings_version_output.stdout

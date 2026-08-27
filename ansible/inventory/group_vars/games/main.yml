@@ -8,7 +8,7 @@ playit_install_dir: /opt/homelab/playit
 # Pterodactyl Panel
 pterodactyl_panel_enabled: true
 
-pterodactyl_panel_image: ghcr.io/pterodactyl/panel:v1.15.0
+pterodactyl_panel_image: ghcr.io/pterodactyl/panel:v1.15.1
 pterodactyl_database_image: docker.io/library/mariadb:11
 pterodactyl_redis_image: docker.io/library/redis:alpine
 
@@ -23,3 +23,8 @@ pterodactyl_service_author: noreply@example.invalid
 
 # Separate from other container networks.
 pterodactyl_podman_subnet: 172.29.0.0/24
+
+# Pterodactyl Wings
+pterodactyl_wings_enabled: true
+pterodactyl_wings_version: "v1.13.3"
+pterodactyl_wings_api_port: 8080

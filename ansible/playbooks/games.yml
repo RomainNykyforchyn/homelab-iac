@@ -8,3 +8,5 @@
     - podman
     - playit
     - pterodactyl_panel
+    - docker_engine
+    - pterodactyl_wings

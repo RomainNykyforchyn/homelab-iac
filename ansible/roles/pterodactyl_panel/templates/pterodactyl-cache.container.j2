@@ -7,7 +7,7 @@ Wants=network-online.target
 Image={{ pterodactyl_redis_image }}
 ContainerName=pterodactyl-cache
 Network=pterodactyl.network
-Volume={{ pterodactyl_data_dir }}/redis:/data
+Volume={{ pterodactyl_data_dir }}/redis:/data:U
 
 [Service]
 Restart=always

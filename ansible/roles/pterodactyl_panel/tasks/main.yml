@@ -29,11 +29,16 @@
         - { path: /etc/pterodactyl, mode: "0750" }
         - { path: "{{ pterodactyl_data_dir }}" }
         - { path: "{{ pterodactyl_data_dir }}/database" }
-        - { path: "{{ pterodactyl_data_dir }}/redis" }
         - { path: "{{ pterodactyl_data_dir }}/var" }
         - { path: "{{ pterodactyl_data_dir }}/nginx" }
         - { path: "{{ pterodactyl_data_dir }}/certs" }
         - { path: "{{ pterodactyl_data_dir }}/logs" }
+    
+    - name: Create Redis data directory
+      ansible.builtin.file:
+        path: "{{ pterodactyl_data_dir }}/redis"
+        state: directory
+        mode: "0755"
 
     - name: Install Pterodactyl database environment
       ansible.builtin.template:
