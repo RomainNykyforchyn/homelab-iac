@@ -29,16 +29,11 @@
         - { path: /etc/pterodactyl, mode: "0750" }
         - { path: "{{ pterodactyl_data_dir }}" }
         - { path: "{{ pterodactyl_data_dir }}/database" }
+        - { path: "{{ pterodactyl_data_dir }}/redis" }
         - { path: "{{ pterodactyl_data_dir }}/var" }
         - { path: "{{ pterodactyl_data_dir }}/nginx" }
         - { path: "{{ pterodactyl_data_dir }}/certs" }
         - { path: "{{ pterodactyl_data_dir }}/logs" }
-    
-    - name: Create Redis data directory
-      ansible.builtin.file:
-        path: "{{ pterodactyl_data_dir }}/redis"
-        state: directory
-        mode: "0755"
 
     - name: Install Pterodactyl database environment
       ansible.builtin.template:
@@ -60,84 +55,115 @@
       no_log: true
       register: pterodactyl_panel_env
 
-    - name: Install Pterodactyl Podman network Quadlet
-      ansible.builtin.template:
-        src: pterodactyl.network.j2
-        dest: /etc/containers/systemd/pterodactyl.network
-        owner: root
-        group: root
-        mode: "0644"
-      register: pterodactyl_network_quadlet
+    # Migration from the old Quadlet setup.
+    - name: Stop legacy Pterodactyl Quadlet services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop:
+        - pterodactyl-panel.service
+        - pterodactyl-cache.service
+        - pterodactyl-db.service
+        - pterodactyl-network.service
+      failed_when: false
 
-    - name: Install MariaDB Quadlet
-      ansible.builtin.template:
-        src: pterodactyl-db.container.j2
-        dest: /etc/containers/systemd/pterodactyl-db.container
-        owner: root
-        group: root
-        mode: "0644"
-      register: pterodactyl_db_quadlet
+    - name: Remove legacy Pterodactyl Quadlets
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/containers/systemd/pterodactyl-panel.container
+        - /etc/containers/systemd/pterodactyl-cache.container
+        - /etc/containers/systemd/pterodactyl-db.container
+        - /etc/containers/systemd/pterodactyl.network
 
-    - name: Install Redis Quadlet
-      ansible.builtin.template:
-        src: pterodactyl-cache.container.j2
-        dest: /etc/containers/systemd/pterodactyl-cache.container
-        owner: root
-        group: root
-        mode: "0644"
-      register: pterodactyl_cache_quadlet
-
-    - name: Install Panel Quadlet
-      ansible.builtin.template:
-        src: pterodactyl-panel.container.j2
-        dest: /etc/containers/systemd/pterodactyl-panel.container
-        owner: root
-        group: root
-        mode: "0644"
-      register: pterodactyl_panel_quadlet
-
-    - name: Reload systemd for Pterodactyl Quadlets
+    - name: Reload systemd after removing Quadlets
       ansible.builtin.systemd:
         daemon_reload: true
 
-    - name: Start Pterodactyl database
+    # One generic Podman lifecycle service handles reboot/shutdown.
+    - name: Enable Podman restart service
       ansible.builtin.systemd:
-        name: pterodactyl-db.service
+        name: podman-restart.service
         enabled: true
+
+    - name: Create Pterodactyl Podman network
+      containers.podman.podman_network:
+        name: pterodactyl-panel
+        subnet: "{{ pterodactyl_podman_subnet }}"
+        state: present
+
+    - name: Run Pterodactyl MariaDB
+      containers.podman.podman_container:
+        name: pterodactyl-db
+        image: "{{ pterodactyl_database_image }}"
         state: started
+        pull: missing
 
-    - name: Start Pterodactyl Redis cache
-      ansible.builtin.systemd:
-        name: pterodactyl-cache.service
-        enabled: true
+        network:
+          - pterodactyl-panel
+
+        env_file:
+          - /etc/pterodactyl/database.env
+
+        volume:
+          - "{{ pterodactyl_data_dir }}/database:/var/lib/mysql"
+
+        command:
+          - --default-authentication-plugin=mysql_native_password
+
+        restart_policy: always
+        stop_timeout: 120
+
+        recreate: "{{ pterodactyl_db_env.changed }}"
+
+    - name: Run Pterodactyl Redis
+      containers.podman.podman_container:
+        name: pterodactyl-cache
+        image: "{{ pterodactyl_redis_image }}"
         state: started
+        pull: missing
 
-    - name: Restart database when its environment changed
-      ansible.builtin.systemd:
-        name: pterodactyl-db.service
-        state: restarted
-      when: pterodactyl_db_env.changed
+        network:
+          - pterodactyl-panel
 
-    - name: Restart cache when its Quadlet changed
-      ansible.builtin.systemd:
-        name: pterodactyl-cache.service
-        state: restarted
-      when: pterodactyl_cache_quadlet.changed
+        volume:
+          - "{{ pterodactyl_data_dir }}/redis:/data:U"
 
-    - name: Start Pterodactyl Panel
-      ansible.builtin.systemd:
-        name: pterodactyl-panel.service
-        enabled: true
+        restart_policy: always
+        stop_timeout: 30
+
+    - name: Run Pterodactyl Panel
+      containers.podman.podman_container:
+        name: pterodactyl-panel
+        image: "{{ pterodactyl_panel_image }}"
         state: started
+        pull: missing
 
-    - name: Restart Panel when configuration changed
-      ansible.builtin.systemd:
-        name: pterodactyl-panel.service
-        state: restarted
-      when: >-
-        pterodactyl_panel_env.changed or
-        pterodactyl_panel_quadlet.changed or
-        pterodactyl_network_quadlet.changed
+        network:
+          - pterodactyl-panel
+
+        requires:
+          - pterodactyl-db
+          - pterodactyl-cache
+
+        env_file:
+          - /etc/pterodactyl/panel.env
+
+        publish:
+          - "{{ pterodactyl_panel_http_port }}:80"
+
+        volume:
+          - "{{ pterodactyl_data_dir }}/var:/app/var"
+          - "{{ pterodactyl_data_dir }}/nginx:/etc/nginx/http.d"
+          - "{{ pterodactyl_data_dir }}/certs:/etc/letsencrypt"
+          - "{{ pterodactyl_data_dir }}/logs:/app/storage/logs"
+
+        restart_policy: always
+        stop_timeout: 60
+
+        recreate: "{{ pterodactyl_panel_env.changed }}"
 
     - name: Wait for Pterodactyl login page
       ansible.builtin.uri:
