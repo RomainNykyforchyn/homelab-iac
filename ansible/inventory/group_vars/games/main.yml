@@ -9,7 +9,7 @@ playit_install_dir: /opt/homelab/playit
 pterodactyl_panel_enabled: true
 
 pterodactyl_panel_image: ghcr.io/pterodactyl/panel:v1.15.1
-pterodactyl_database_image: docker.io/library/mariadb:11
+pterodactyl_database_image: docker.io/library/mariadb:11.8.9
 pterodactyl_redis_image: docker.io/library/redis:alpine
 
 pterodactyl_data_dir: /srv/pterodactyl

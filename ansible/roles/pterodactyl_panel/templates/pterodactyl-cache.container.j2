@@ -12,6 +12,7 @@ Volume={{ pterodactyl_data_dir }}/redis:/data:U
 [Service]
 Restart=always
 RestartSec=5
+TimeoutStopSec=120
 TimeoutStartSec=300
 
 [Install]
